@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+sqlalchemy
+packaging
+ipaddress
+python-jose[cryptography]
+python-dotenv

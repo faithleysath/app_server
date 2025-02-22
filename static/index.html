@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>应用授权管理系统</title>
+    <!-- 引入样式 -->
+    <link rel="stylesheet" href="/static/css/element-plus.css">
+    <style>
+        .container {
+            padding: 20px;
+        }
+        .login-container {
+            width: 400px;
+            margin: 100px auto;
+            padding: 20px;
+            box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1);
+            border-radius: 4px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 登录页面 -->
+        <div v-if="!isLoggedIn" class="login-container">
+            <h2>登录</h2>
+            <el-form :model="loginForm" @submit.prevent="handleLogin">
+                <el-form-item label="用户名">
+                    <el-input v-model="loginForm.username"></el-input>
+                </el-form-item>
+                <el-form-item label="密码">
+                    <el-input type="password" v-model="loginForm.password"></el-input>
+                </el-form-item>
+                <el-form-item>
+                    <el-button type="primary" @click="handleLogin">登录</el-button>
+                </el-form-item>
+            </el-form>
+        </div>
+
+        <!-- 主应用页面 -->
+        <div v-else class="container">
+            <div class="header">
+                <h2>应用授权管理系统</h2>
+                <el-button @click="handleLogout">退出登录</el-button>
+            </div>
+
+            <el-tabs v-model="activeTab">
+                <!-- 授权规则管理 -->
+                <el-tab-pane label="授权规则" name="auth">
+                    <div style="margin-bottom: 20px">
+                        <el-button type="primary" @click="showAddAuthDialog">添加规则</el-button>
+                    </div>
+                    
+                    <el-table :data="authRules" border>
+                        <el-table-column prop="id" label="ID" width="80"></el-table-column>
+                        <el-table-column prop="app" label="应用名称"></el-table-column>
+                        <el-table-column prop="version_rule" label="版本规则"></el-table-column>
+                        <el-table-column prop="ip_rule" label="IP规则"></el-table-column>
+                        <el-table-column label="操作" width="200">
+                            <template #default="scope">
+                                <el-button size="small" @click="editAuth(scope.row)">编辑</el-button>
+                                <el-button size="small" type="danger" @click="deleteAuth(scope.row)">删除</el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+
+                    <!-- 添加/编辑授权规则对话框 -->
+                    <el-dialog :title="dialogTitle" v-model="showAuthDialog">
+                        <el-form :model="authForm">
+                            <el-form-item label="应用名称">
+                                <el-input v-model="authForm.app"></el-input>
+                            </el-form-item>
+                            <el-form-item label="版本规则">
+                                <el-input v-model="authForm.version_rule" placeholder="例如: >=1.0.0"></el-input>
+                            </el-form-item>
+                            <el-form-item label="IP规则">
+                                <el-input type="textarea" v-model="authForm.ip_rule" placeholder="每行一个IP或IP段"></el-input>
+                            </el-form-item>
+                            <el-form-item label="详细信息">
+                                <el-input type="textarea" v-model="authForm.detail_info"></el-input>
+                            </el-form-item>
+                        </el-form>
+                        <template #footer>
+                            <el-button @click="showAuthDialog = false">取消</el-button>
+                            <el-button type="primary" @click="saveAuth">保存</el-button>
+                        </template>
+                    </el-dialog>
+                </el-tab-pane>
+
+                <!-- 事件记录 -->
+                <el-tab-pane label="事件记录" name="events">
+                    <div style="margin-bottom: 20px">
+                        <el-form :inline="true" :model="eventFilter">
+                            <el-form-item label="应用名称">
+                                <el-input v-model="eventFilter.app"></el-input>
+                            </el-form-item>
+                            <el-form-item label="事件类型">
+                                <el-select v-model="eventFilter.event_type">
+                                    <el-option label="全部" value=""></el-option>
+                                    <el-option label="启动" value="start"></el-option>
+                                    <el-option label="停止" value="stop"></el-option>
+                                </el-select>
+                            </el-form-item>
+                            <el-form-item>
+                                <el-button type="primary" @click="loadEvents">查询</el-button>
+                            </el-form-item>
+                        </el-form>
+                    </div>
+
+                    <el-table :data="events" border>
+                        <el-table-column prop="id" label="ID" width="80"></el-table-column>
+                        <el-table-column prop="app" label="应用名称"></el-table-column>
+                        <el-table-column prop="version" label="版本"></el-table-column>
+                        <el-table-column prop="event_type" label="事件类型">
+                            <template #default="scope">
+                                {{ scope.row.event_type === 'start' ? '启动' : '停止' }}
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="client_ip" label="客户端IP"></el-table-column>
+                        <el-table-column prop="created_at" label="创建时间"></el-table-column>
+                    </el-table>
+                </el-tab-pane>
+
+                <!-- 统计报表 -->
+                <el-tab-pane label="统计报表" name="stats">
+                    <div style="margin-bottom: 20px">
+                        <el-form :inline="true" :model="statsFilter">
+                            <el-form-item label="时间范围">
+                                <el-date-picker
+                                    v-model="statsFilter.dateRange"
+                                    type="daterange"
+                                    range-separator="至"
+                                    start-placeholder="开始日期"
+                                    end-placeholder="结束日期">
+                                </el-date-picker>
+                            </el-form-item>
+                            <el-form-item>
+                                <el-button type="primary" @click="generateStats">生成报表</el-button>
+                            </el-form-item>
+                        </el-form>
+                    </div>
+
+                    <el-card class="stats-card" v-if="stats.length">
+                        <template #header>
+                            <div>应用使用统计</div>
+                        </template>
+                        <el-table :data="stats" border>
+                            <el-table-column prop="app" label="应用名称"></el-table-column>
+                            <el-table-column prop="start_count" label="启动次数"></el-table-column>
+                            <el-table-column prop="stop_count" label="停止次数"></el-table-column>
+                            <el-table-column prop="unique_ips" label="独立IP数"></el-table-column>
+                        </el-table>
+                    </el-card>
+                </el-tab-pane>
+            </el-tabs>
+        </div>
+    </div>
+
+    <!-- 引入Vue和Element Plus -->
+    <script src="/static/js/lib/vue.js"></script>
+    <script src="/static/js/lib/element-plus.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
